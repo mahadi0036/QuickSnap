@@ -5,31 +5,44 @@ using SwinGameSDK;
 using NUnit.Framework;
 #endif 
 
-
 namespace CardGames.GameLogic
 {
-	/// <summary>
-	/// The Snap card game in which the user scores a point if they
-	/// click when the rank of the last two cards match.
-	/// </summary>
-	public class Snap
-	{
-		// Keep only the last two cards...
-		private readonly Card[] _topCards = new Card[2];
+    public class Snap
+    {
+        private readonly Card[] _topCards = new Card[2];
+        private readonly Deck _deck;
+        private readonly Timer _gameTimer;
+        private int _flipTime = 1000;
+        private int[] _score = new int[2];
+        private bool _started = false;
 
-		// Have a Deck of cards to play with.
-		private readonly Deck _deck;
+        public Snap()
+        {
+            _deck = new Deck();
+            _gameTimer = SwinGame.CreateTimer();
+        }
 
-		// Use a timer to allow the game to draw cards at timed intervals
-		private readonly Timer _gameTimer;
+        public Card TopCard
+        {
+            get { return _topCards[1]; }
+        }
 
-		// The amount of time that must pass before a card is flipped?
-		private int _flipTime = 1000;
+        public bool CardsRemain
+        {
+            get { return _deck.CardsRemaining > 0; }
+        }
 
-		// the score for the 2 players
-		private int[] _score = new int[2];
+        public int FlipTime
+        {
+            get { return _flipTime; }
+            set { _flipTime = value; }
+        }
 
-		private bool _started = false;
+        public bool IsStarted
+        {
+            get { return _started; }
+        }
+
 
 		/// <summary>
 		/// Create a new game of Snap!
@@ -40,47 +53,61 @@ namespace CardGames.GameLogic
 		    _gameTimer = SwinGame.CreateTimer ();
 		}
 
-		/// <summary>
-		/// Gets the card on the top of the "flip" stack. This card will be face up.
-		/// </summary>
-		/// <value>The top card.</value>
-		public Card TopCard
-		{
-			get
-			{
-				return _topCards [1];
-			}
-		}
+        public void Start()
+        {
+            if (!IsStarted)
+            {
+                _started = true;
+                _deck.Shuffle();
+                FlipNextCard();
+                _gameTimer.Start();
+            }
+        }
 
-		/// <summary>
-		/// Indicates if there are cards remaining in the Snap game's Deck.
-		/// The game is over when there are no cards remaining.
-		/// </summary>
-		/// <value><c>true</c> if cards remain; otherwise, <c>false</c>.</value>
-		public bool CardsRemain
-		{
-			get { return _deck.CardsRemaining > 0; }
-		}
 
-		/// <summary>
-		/// Determines how many milliseconds need to pass before a new card is drawn
-		/// and placed on the top of the game's card stack.
-		/// </summary>
-		/// <value>The flip time.</value>
-		public int FlipTime
-		{
-			get { return _flipTime; }
-			set { _flipTime = value; }
-		}
+        public void FlipNextCard()
+        {
+            if (_deck.CardsRemaining > 0)
+            {
+                _topCards[0] = _topCards[1];
+                _topCards[1] = _deck.Draw();
+                _topCards[1].TurnOver();
+            }
+        }
 
-		/// <summary>
-		/// Indicates if the game has already been started. You can only start the game once.
-		/// </summary>
-		/// <value><c>true</c> if this instance is started; otherwise, <c>false</c>.</value>
-		public bool IsStarted
-		{
-			get { return _started; }
-		}
+        public void Update()
+        {
+            if (IsStarted && _gameTimer.Ticks > _flipTime)
+            {
+                _gameTimer.Reset();
+                FlipNextCard();
+            }
+        }
+
+        public int Score(int idx)
+        {
+            if (idx >= 0 && idx < _score.Length)
+                return _score[idx];
+            return 0;
+        }
+
+        public void PlayerHit(int player)
+        {
+            if (player >= 0 && player < _score.Length && IsStarted)
+            {
+                if (_topCards[0] != null && _topCards[0].Rank == _topCards[1].Rank)
+                {
+                    _score[player]++;
+                }
+                else
+                {
+                    _score[player] = Math.Max(0, _score[player] - 1);
+                }
+                _started = false;
+                _gameTimer.Stop();
+            }
+        }
+
 
 		/// <summary>
 		/// Start the Snap game playing!
@@ -188,3 +215,29 @@ namespace CardGames.GameLogic
 	}
 }
 
+        #if DEBUG
+        public class SnapTests
+        {
+            [Test]
+            public void TestSnapCreation()
+            {
+                Snap s = new Snap();
+                Assert.IsTrue(s.CardsRemain);
+                Assert.IsNull(s.TopCard);
+            }
+
+
+            [Test]
+            public void TestFlipNextCard()
+            {
+                Snap s = new Snap();
+                Assert.IsTrue(s.CardsRemain);
+                Assert.IsNull(s.TopCard);
+                s.FlipNextCard();
+                Assert.IsNull(s._topCards[0]);
+                Assert.IsNotNull(s._topCards[1]);
+            }
+        }
+        #endif
+    }
+}
